@@ -1,7 +1,9 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Microsoft.AspNetCore.Cors;
+using System.ComponentModel.DataAnnotations;
 
 namespace WebApplication1.Models
 {
+    [EnableCors("CorsPolicy")]
     public class LoginModel
     {
         [Required]

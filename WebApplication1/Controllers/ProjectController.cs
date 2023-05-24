@@ -9,11 +9,16 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using System;
+using Microsoft.AspNetCore.Cors;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Text;
 
 namespace WebApplication1.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [EnableCors("CorsPolicy")]
     public class ProjectsController : ControllerBase
     {
         private readonly UserManager<IdentityUser> _userManager;
@@ -25,11 +30,29 @@ namespace WebApplication1.Controllers
             _context = context;
         }
 
-        // GET: api/Projects
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Project>>> GetProjects()
+        public async Task<ActionResult<IEnumerable<Project>>> GetProjects(string? name)
         {
-            return await _context.Projects.ToListAsync();
+            IQueryable<Project> query = _context.Projects;
+
+            if (!string.IsNullOrEmpty(name))
+            {
+                // Convert the search name to lowercase
+                string searchName = name.ToLower();
+
+                // Apply the filter based on the lowercase name
+                query = query.Where(p => p.name.ToLower().Contains(searchName));
+            }
+
+            List<Project> projects = await query.ToListAsync();
+
+            if (string.IsNullOrEmpty(name))
+            {
+                // Return all projects when name is null or empty
+                return await _context.Projects.ToListAsync();
+            }
+
+            return projects;
         }
 
         // GET: api/Projects/5
@@ -73,25 +96,62 @@ namespace WebApplication1.Controllers
 
         // POST: api/Projects
         [HttpPost]
-        [Authorize]
         public async Task<ActionResult<Project>> PostProject(ProjectCreateDto projectDto)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier); // get the user id from the token.
-            if (userId == null) return Unauthorized();
-
-            var user = await _userManager.FindByIdAsync(userId); // Replace Users with your DbSet name for IdentityUser if different
-
-            if (user != null)
+            string authorizationHeader = Request?.Headers["Authorization"];
+            if (!string.IsNullOrEmpty(authorizationHeader) && authorizationHeader.StartsWith("Bearer "))
+            {
+                string bearerToken = authorizationHeader.Substring("Bearer ".Length).Trim();
+                string userEmail = "";
+             
+                var tokenHandler = new JwtSecurityTokenHandler();
+                var validationParameters = new TokenValidationParameters
                 {
-                var project = new Project
-                {
-                    name = projectDto.name,
-                    description = projectDto.description,
-                    User = user,
-                    UserId = userId,
-                    Tickets = new List<Ticket>()
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("a very very very very very long string that is at least 32 characters")),
+
+                    ValidateIssuer = true,
+                    ValidIssuer = "baseApiIssuer",
+
+                    ValidateAudience = true,
+                    ValidAudience = "baseApiIssuer",
                 };
-        
+                try
+                {
+                    // Validate the token and extract claims
+                    ClaimsPrincipal claimsPrincipal = tokenHandler.ValidateToken(bearerToken, validationParameters, out SecurityToken validatedToken);
+
+                    // Find the user id claim in the token
+                    Claim userIdClaim = claimsPrincipal.FindFirst(ClaimTypes.NameIdentifier);
+                    if (userIdClaim != null)
+                    {
+                         userEmail = userIdClaim.Value;
+                 
+                    }
+                }
+                catch (Exception ex)
+                {
+                    return Ok(ex?.Message);
+                }
+                 // implement a method to extract the user id from the token
+                if (userEmail == null)
+                {
+                    return Unauthorized(); 
+                }
+
+                var user = await _userManager.FindByEmailAsync(userEmail);
+
+                if (user != null)
+                {
+                    var project = new Project
+                    {
+                        name = projectDto.name,
+                        description = projectDto.description,
+                        User = user,
+                        UserId = user.Id,
+                        Tickets = new List<Ticket>()
+                    };
+
                     _context.Projects.Add(project);
                     await _context.SaveChangesAsync();
 
@@ -99,16 +159,21 @@ namespace WebApplication1.Controllers
                 }
                 else
                 {
-                    return BadRequest("Invalid User Id");
+                    return BadRequest(user);
                 }
             }
-       
-        
+            else
+            {
+                return BadRequest("Bearer token not provided");
+            }
+        }
+
+
 
 
         // DELETE: api/Projects/5
         [HttpDelete("{id}")]
-         [Authorize]
+        
     public async Task<IActionResult> Project(int id)
         {
             var project = await _context.Projects.FindAsync(id);
@@ -128,4 +193,5 @@ namespace WebApplication1.Controllers
             return _context.Projects.Any(e => e.id == id);
         }
     }
+    
 }

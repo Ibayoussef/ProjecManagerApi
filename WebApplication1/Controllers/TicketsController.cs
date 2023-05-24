@@ -6,11 +6,13 @@ using System.Collections.Generic;
 using System.Linq;
 using WebApplication1.DB;
 using WebApplication1.Dtos;
+using Microsoft.AspNetCore.Cors;
 
 namespace WebApplication1.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [EnableCors("CorsPolicy")]
     public class TicketsController : ControllerBase
     {
         private readonly ApiDbContext _context;
@@ -20,11 +22,34 @@ namespace WebApplication1.Controllers
             _context = context;
         }
 
-        // GET: api/Tickets
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Ticket>>> GetTickets()
+        public async Task<ActionResult<IEnumerable<Ticket>>> GetTickets(string? query, string? status, string? assignee)
         {
-            return await _context.Tickets.ToListAsync();
+            IQueryable<Ticket> ticketsQuery = _context.Tickets;
+
+            if (!string.IsNullOrEmpty(query))
+            {
+                ticketsQuery = ticketsQuery.Where(t => t.title.ToLower().Contains(query));
+            }
+
+            if (!string.IsNullOrEmpty(status))
+            {
+                ticketsQuery = ticketsQuery.Where(t => t.Status == status);
+            }
+
+            if (!string.IsNullOrEmpty(assignee))
+            {
+                ticketsQuery = ticketsQuery.Where(t => t.Assignee == assignee);
+            }
+
+            var tickets = await ticketsQuery.ToListAsync();
+
+            if (string.IsNullOrEmpty(query) && string.IsNullOrEmpty(status) && string.IsNullOrEmpty(assignee))
+            {
+                tickets = await _context.Tickets.ToListAsync();
+            }
+
+            return tickets;
         }
 
         // GET: api/Tickets/5
@@ -57,9 +82,21 @@ namespace WebApplication1.Controllers
             {
                 ticket.title = ticketDto.title;
             }
-            if (ticketDto.Description != null)
+            if (ticketDto.Summary != null)
             {
-                ticket.Description = ticketDto.Description;
+                ticket.Summary = ticketDto.Summary;
+            }
+            if (ticketDto.Assignee != null)
+            {
+                ticket.Assignee = ticketDto.Assignee;
+            }
+            if (ticketDto.Priority != null)
+            {
+                ticket.Priority = ticketDto.Priority;
+            }
+            if (ticketDto.Type != null)
+            {
+                ticket.Type = ticketDto.Type;
             }
             if (ticketDto.Status != null)
             {
@@ -69,6 +106,7 @@ namespace WebApplication1.Controllers
             try
             {
                 await _context.SaveChangesAsync();
+                return Ok("edited");
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -95,11 +133,18 @@ namespace WebApplication1.Controllers
             {
                 return BadRequest("Invalid Project Id");
             }
+            string summary = ticketDto.Description.Length > 100 ? ticketDto.Description.Substring(0, 100) : ticketDto.Description;
 
             var ticket = new Ticket
             {
                 title = ticketDto.title,
                 Description = ticketDto.Description,
+                Summary = summary,
+                Type = ticketDto.Type,
+                Priority = ticketDto.Priority,
+                Assignee = ticketDto.Assignee,
+                Color = "#E64A19",
+                Tags = ticketDto.Tags,
                 Status = "ToDo",
                 ProjectId = ticketDto.ProjectId,
                 Project = project

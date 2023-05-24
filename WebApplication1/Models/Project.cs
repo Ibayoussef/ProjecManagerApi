@@ -1,11 +1,14 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Cors;
+using Microsoft.AspNetCore.Identity;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics.CodeAnalysis;
 
 namespace WebApplication1.Models
 {
+    [EnableCors("CorsPolicy")]
     [Table("project")]
+   
     public class Project
     {
         [Key, Required]

@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -9,6 +11,7 @@ using WebApplication1.Models;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableCors("CorsPolicy")]
 public class AuthController : ControllerBase
 {
     private readonly UserManager<IdentityUser> _userManager;
@@ -43,7 +46,13 @@ public class AuthController : ControllerBase
         var user = await _userManager.FindByEmailAsync(model.Email);
         return Ok(new { Token = GenerateJwtToken(model.Email, user) });
     }
+    [HttpGet("Users")]
+    public async Task<IActionResult> GetUsers()
+    {
+        var users = await _userManager.Users.ToListAsync();
 
+        return Ok(users);
+    }
     [HttpGet("Me")]
     [Authorize]
     public async Task<IActionResult> GetCurrentUser()
@@ -63,7 +72,8 @@ public class AuthController : ControllerBase
         {
             new Claim(JwtRegisteredClaimNames.Sub, email),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new Claim(ClaimTypes.NameIdentifier, user.Id)
+            new Claim(ClaimTypes.NameIdentifier, user.Id),
+            new Claim(ClaimTypes.Email, email)
         };
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtKey"]));
@@ -80,4 +90,5 @@ public class AuthController : ControllerBase
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+    
 }

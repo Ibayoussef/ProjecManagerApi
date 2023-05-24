@@ -42,7 +42,14 @@ builder.Services.AddSwaggerGen(c =>
             }, new string[]{ } }
     });
 });
-
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("CorsPolicy",
+        builder => builder .AllowAnyOrigin() 
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+           );
+});
 builder.Services.AddDbContext<ApiDbContext>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("ApiDbContext")));
 builder.Services.AddIdentity<IdentityUser, IdentityRole>()
     .AddEntityFrameworkStores<ApiDbContext>();
@@ -71,8 +78,11 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
-
 app.UseAuthorization();
+
+app.UseCors("CorsPolicy");
+
+
 
 app.MapControllers();
 
